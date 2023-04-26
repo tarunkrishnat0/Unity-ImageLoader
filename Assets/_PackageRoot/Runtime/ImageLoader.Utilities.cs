@@ -56,24 +56,24 @@ namespace Extensions.Unity.ImageLoader
             //    loadedTexture.LoadImage(data);
             //} catch (Exception e)
             //{
-            //    Debug.Log($"LoadSpriteiBC: LoadImage failed error={e.Message}, using format={finalGraphicsFormat}, trying again with {GraphicsFormat.R8G8B8A8_SRGB}");
+            //    Debug.Log($"CreateTexWithMipmaps: LoadImage failed error={e.Message}, using format={finalGraphicsFormat}, trying again with {GraphicsFormat.R8G8B8A8_SRGB}");
             //    finalGraphicsFormat = GraphicsFormat.R8G8B8A8_SRGB;
             //    loadedTexture = new Texture2D(width, height, finalGraphicsFormat, flags);
             //    if (loadedTexture.LoadImage(data) == false)
             //    {
-            //        Debug.LogError($"LoadSpriteiBC: LoadImage failed, using format={finalGraphicsFormat}, returning null texture");
+            //        Debug.LogError($"CreateTexWithMipmaps: LoadImage failed, using format={finalGraphicsFormat}, returning null texture");
             //        loadedTexture = null;
             //    }
             //}
 
             if (loadedTexture.LoadImage(data) == false)
             {
-                Debug.Log($"LoadSpriteiBC: LoadImage failed, using format={finalGraphicsFormat}, trying again with {GraphicsFormat.R8G8B8A8_SRGB}");
+                Debug.Log($"CreateTexWithMipmaps: LoadImage failed, using format={finalGraphicsFormat}, trying again with {GraphicsFormat.R8G8B8A8_SRGB}");
                 finalGraphicsFormat = GraphicsFormat.R8G8B8A8_SRGB;
                 loadedTexture = new Texture2D(width, height, finalGraphicsFormat, flags);
                 if (loadedTexture.LoadImage(data) == false)
                 {
-                    Debug.LogError($"LoadSpriteiBC: LoadImage failed, using format={finalGraphicsFormat}, returning null texture");
+                    Debug.LogError($"CreateTexWithMipmaps: LoadImage failed, using format={finalGraphicsFormat}, returning null texture");
                     loadedTexture = null;
                 }
             }
@@ -99,12 +99,12 @@ namespace Extensions.Unity.ImageLoader
 
             if (loadedTexture.LoadImage(data) == false)
             {
-                Debug.Log($"LoadSpriteiBC: LoadImage failed using format={finalGraphicsFormat}, size={loadedTexture.width}x{loadedTexture.height} trying again with {GraphicsFormat.R8G8B8A8_SRGB}");
+                Debug.Log($"CreateTexWithMipmaps: LoadImage failed using format={finalGraphicsFormat}, size={loadedTexture.width}x{loadedTexture.height} trying again with {GraphicsFormat.R8G8B8A8_SRGB}");
                 finalGraphicsFormat = GraphicsFormat.R8G8B8A8_SRGB;
                 loadedTexture = new Texture2D(4, 4, finalGraphicsFormat, flags);
                 if (loadedTexture.LoadImage(data) == false)
                 {
-                    Debug.LogError($"LoadSpriteiBC: LoadImage failed, using format={finalGraphicsFormat}, returning null texture");
+                    Debug.LogError($"CreateTexWithMipmaps: LoadImage failed, using format={finalGraphicsFormat}, returning null texture");
                     loadedTexture = null;
                 }
             }

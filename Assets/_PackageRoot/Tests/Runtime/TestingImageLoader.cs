@@ -27,11 +27,12 @@ namespace Extensions.Unity.ImageLoader.Testing
 
         readonly string[] ImageURLs =
             {
-            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/master/Test%20Images/ImageA.jpg",
-            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/master/Test%20Images/ImageB.png",
-            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/master/Test%20Images/ImageC.png",
-            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/master/Test%20Images/batsman_512.png",
-            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/master/Test%20Images/batsman_1000.jpg",
+            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/ImageA.jpg",
+            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/ImageB.png",
+            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/ImageC.png",
+            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/batsman_512.png",
+            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/batsman_1000.jpg",
+            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/batsman_2048.png",
         };
 
         // Start is called before the first frame update

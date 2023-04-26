@@ -41,7 +41,7 @@ namespace Extensions.Unity.ImageLoader
         public static Sprite LoadFromMemoryCache(string url)
         {
             if (!settings.useMemoryCache) return null;
-            return memorySpriteCache.GetValueOrDefault(url);
+            return GetValueOrDefault(url);
         }
         /// <summary>
         /// Clear Memory cache for the given url
@@ -49,7 +49,7 @@ namespace Extensions.Unity.ImageLoader
         /// <param name="url">URL to the picture, web or local</param>
         public static void ClearMemoryCache(string url)
         {
-            var cache = memorySpriteCache.GetValueOrDefault(url);
+            var cache = GetValueOrDefault(url);
             if (cache?.texture != null)
                 UnityEngine.Object.DestroyImmediate(cache.texture);
 
@@ -67,6 +67,16 @@ namespace Extensions.Unity.ImageLoader
                     UnityEngine.Object.DestroyImmediate(cache.texture);
             }
             memorySpriteCache.Clear();
+        }
+
+        private static Sprite GetValueOrDefault(string url)
+        {
+            if(memorySpriteCache.TryGetValue(url, out var value))
+            {
+                return value;
+            }
+
+            return default;
         }
     }
 }

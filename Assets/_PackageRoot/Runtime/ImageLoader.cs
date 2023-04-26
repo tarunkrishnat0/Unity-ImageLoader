@@ -4,6 +4,8 @@ using UnityEngine.Networking;
 using Cysharp.Threading.Tasks;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.IO;
+using UnityEngine.Profiling;
 
 namespace Extensions.Unity.ImageLoader
 {
@@ -165,8 +167,129 @@ namespace Extensions.Unity.ImageLoader
             }
             else
             {
+                string name = Path.GetFileNameWithoutExtension(url);
+                Profiler.BeginSample("LoadSprite "+name);
+                
+                var tex = ((DownloadHandlerTexture)request.downloadHandler).texture;
+                Debug.Log($"LoadSprite: name={name}, size={Utils.ToSize(tex.GetRawTextureData().Length)}, mipmap={tex.mipmapCount}, format={tex.format}, graphicsFormat={tex.graphicsFormat}, size={tex.width}x{tex.height}");
+
+                var sprite = ToSprite(tex);
+                Profiler.EndSample();
                 await SaveDiskAsync(url, request.downloadHandler.data);
-                var sprite = ToSprite(((DownloadHandlerTexture)request.downloadHandler).texture);
+                SaveToMemoryCache(url, sprite, replace: true);
+                return sprite;
+            }
+        }
+
+        public static UniTask<Sprite> LoadSpriteMemoryOptimized(string url, TextureFormat textureFormat = TextureFormat.ARGB32, bool ignoreImageNotFoundError = false)
+            => LoadSpriteMemoryOptimized(url, Vector2.one * 0.5f, textureFormat, ignoreImageNotFoundError);
+
+        /// <summary>
+        /// Load image from web or local path and return it as Sprite but with possible memory optimization by using compression when generating texture and option to enable mipmaps.
+        /// </summary>
+        /// <param name="url">URL to the picture, web or local</param>
+        /// <param name="pivot">Pivot of created Sprite</param>
+        /// <param name="textureFormat">TextureFormat for the Texture2D creation</param>
+        /// <param name="ignoreImageNotFoundError">Ignore error if the image was not found by specified url</param>
+        /// <returns>Returns sprite asynchronously </returns>
+        public static async UniTask<Sprite> LoadSpriteMemoryOptimized(string url, Vector2 pivot, TextureFormat textureFormat = TextureFormat.ARGB32, bool ignoreImageNotFoundError = false)
+        {
+            if (string.IsNullOrEmpty(url))
+            {
+                if (settings.debugLevel <= DebugLevel.Error)
+                    Debug.LogError($"[ImageLoader] Empty url. Image could not be loaded!");
+                return null;
+            }
+
+            if (MemoryCacheContains(url))
+            {
+                var sprite = LoadFromMemoryCache(url);
+                if (sprite != null)
+                    return sprite;
+            }
+
+            if (IsLoading(url))
+            {
+                if (settings.debugLevel <= DebugLevel.Log)
+                    Debug.Log($"[ImageLoader] Waiting while another task is loading the sprite url={url}");
+                await UniTask.WaitWhile(() => IsLoading(url));
+                return await LoadSprite(url, textureFormat, ignoreImageNotFoundError);
+            }
+
+            AddLoading(url);
+
+            if (settings.debugLevel <= DebugLevel.Log)
+                Debug.Log($"[ImageLoader] Loading new Sprite into memory url={url}");
+            try
+            {
+                var cachedImage = await LoadDiskAsync(url);
+                if (cachedImage != null && cachedImage.Length > 0)
+                {
+                    await UniTask.SwitchToMainThread();
+                    var texture = new Texture2D(2, 2, textureFormat, true);
+                    if (texture.LoadImage(cachedImage))
+                    {
+                        var sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), pivot);
+                        if (sprite != null)
+                            SaveToMemoryCache(url, sprite, replace: true);
+
+                        RemoveLoading(url);
+                        return sprite;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                if (settings.debugLevel <= DebugLevel.Exception)
+                    Debug.LogException(e);
+            }
+
+            UnityWebRequest request = null;
+            var finished = false;
+            UniTask.Post(async () =>
+            {
+                try
+                {
+                    // request = UnityWebRequestTexture.GetTexture(url);
+                    request = new UnityWebRequest(url);
+                    request.downloadHandler = new DownloadHandlerBuffer();
+
+                    await request.SendWebRequest();
+                }
+                catch (Exception e)
+                {
+                    if (!ignoreImageNotFoundError)
+                        if (settings.debugLevel <= DebugLevel.Exception)
+                            Debug.LogException(e);
+                }
+                finally
+                {
+                    finished = true;
+                }
+            });
+            await UniTask.WaitUntil(() => finished);
+
+            RemoveLoading(url);
+
+            if (request.isNetworkError || request.isHttpError)
+            {
+                if (settings.debugLevel <= DebugLevel.Error)
+                    Debug.LogError($"[ImageLoader] {request.error}: url={url}");
+                return null;
+            }
+            else
+            {
+                string name = Path.GetFileNameWithoutExtension(url);
+                Profiler.BeginSample("LoadSpriteMemoryOptimized " + name);
+
+                //Debug.Log($"LoadSpriteMemoryOptimized: before name={name}, size={Utils.ToSize(request.downloadHandler.data.Length)}");
+                var compressedTexture = Utils.CreateTexWithMipmaps(request.downloadHandler.data, settings.generateMipMaps);
+                Debug.Log($"LoadSpriteMemoryOptimized: name={name}, size={Utils.ToSize(compressedTexture.GetRawTextureData().Length)}, mipmap={compressedTexture.mipmapCount}, format={compressedTexture.format}, graphicsFormat={compressedTexture.graphicsFormat}, size={compressedTexture.width}x{compressedTexture.height}");
+                var sprite = ToSprite(compressedTexture);
+
+                Profiler.EndSample();
+
+                await SaveDiskAsync(url, request.downloadHandler.data);
                 SaveToMemoryCache(url, sprite, replace: true);
                 return sprite;
             }

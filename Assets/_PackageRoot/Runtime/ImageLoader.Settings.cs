@@ -11,9 +11,11 @@ namespace Extensions.Unity.ImageLoader
 #if UNITY_WEBGL 
         public bool useDiskCache = false; // default value for WebGL = false
 #else
-        public bool useDiskCache = true;  // default value for non WebGL = true
+        public bool useDiskCache = false;  // default value for non WebGL = true
 #endif
         public string diskSaveLocation { get; set; } = UnityEngine.Application.persistentDataPath + "/imageCache";
+
+        public bool generateMipMaps = true;
     }
 
     public enum DebugLevel

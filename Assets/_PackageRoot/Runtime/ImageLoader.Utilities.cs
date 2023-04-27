@@ -1,6 +1,10 @@
 using System;
+using System.Collections;
+using System.IO;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
+using UnityEngine.Networking;
+using UnityEngine.UI;
 
 namespace Extensions.Unity.ImageLoader
 {
@@ -121,6 +125,86 @@ namespace Extensions.Unity.ImageLoader
                 loadedTexture.Compress(false);
 
             return loadedTexture;
+        }
+
+        public static IEnumerator GetImageUsingUWRTexture(string url, Image img = null)
+        {
+            UnityWebRequest uwr = UnityWebRequestTexture.GetTexture(url);
+
+            yield return uwr.SendWebRequest();
+
+            string name = Path.GetFileNameWithoutExtension(url);
+            if (uwr.result != UnityWebRequest.Result.Success || !uwr.isDone)
+            {
+                Debug.Log($"GetImageUsingUWRTexture: Download failed : name={name}, error=" + uwr.error);
+            }
+            else
+            {
+                Texture2D uwrTexture = ((DownloadHandlerTexture)uwr.downloadHandler).texture;
+
+                Sprite downloadedSprite = Sprite.Create(
+                    uwrTexture,
+                    new Rect(0, 0, uwrTexture.width, uwrTexture.height),
+                    Vector2.zero,
+                    100f,
+                    0,
+                    SpriteMeshType.FullRect);
+
+                if(img != null) img.overrideSprite = downloadedSprite;
+
+                Debug.Log($"GetImageUsingUWRTexture: name={name}, RawSize={Utils.ToSize(uwrTexture.GetRawTextureData().Length)}, mipmap={uwrTexture.mipmapCount}, format={uwrTexture.format}, graphicsFormat={uwrTexture.graphicsFormat}, dimensions={uwrTexture.width}x{uwrTexture.height}");
+
+                uwr.Dispose();
+            }
+        }
+
+        public static IEnumerator GetImageUsingUWRBufferAndEnableMipmapsAndCompression(string url, Image img = null)
+        {
+            UnityWebRequest uwr = new UnityWebRequest(url);
+            uwr.downloadHandler = new DownloadHandlerBuffer();
+
+            yield return uwr.SendWebRequest();
+
+            string name = Path.GetFileNameWithoutExtension(url);
+            if (uwr.result != UnityWebRequest.Result.Success || !uwr.isDone)
+            {
+                Debug.Log($"GetImageUsingUWRBufferAndEnableMipmapsAndCompression: Download failed : name={name}, error=" + uwr.error);
+            }
+            else
+            {
+                GraphicsFormat graphicsFormat = GraphicsFormat.R8G8B8A8_SRGB;
+                TextureCreationFlags flags = TextureCreationFlags.None;
+                // Generate MipMaps
+                flags = TextureCreationFlags.MipChain;
+
+                var createdTexture = new Texture2D(4, 4, graphicsFormat, flags)
+                {
+                    name = name,
+                    wrapMode = TextureWrapMode.Clamp,
+                };
+
+                if (createdTexture.LoadImage(uwr.downloadHandler.data) == false)
+                {
+                    Debug.LogError($"GetImageUsingUWRBufferAndEnableMipmapsAndCompression: LoadImage failed using format={graphicsFormat}");
+                }
+
+                if (createdTexture.width % 4 == 0 && createdTexture.height % 4 == 0)
+                    createdTexture.Compress(false);
+
+                Sprite downloadedSprite = Sprite.Create(
+                    createdTexture,
+                    new Rect(0, 0, createdTexture.width, createdTexture.height),
+                    Vector2.zero,
+                    100f,
+                    0,
+                    SpriteMeshType.FullRect);
+
+                if (img != null) img.overrideSprite = downloadedSprite;
+
+                Debug.Log($"GetImageUsingUWRBufferAndEnableMipmapsAndCompression: name={name}, RawSize={Utils.ToSize(createdTexture.GetRawTextureData().Length)}, mipmap={createdTexture.mipmapCount}, format={createdTexture.format}, graphicsFormat={createdTexture.graphicsFormat}, dimensions={createdTexture.width}x{createdTexture.height}");
+
+                uwr.Dispose();
+            }
         }
     }
 }

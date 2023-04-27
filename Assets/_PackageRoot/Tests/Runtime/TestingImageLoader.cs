@@ -31,8 +31,8 @@ namespace Extensions.Unity.ImageLoader.Testing
 
         static Dictionary<string, Sprite> spriteCache = new Dictionary<string, Sprite>();
 
-        //private readonly static string base_url = "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/";
-        private readonly static string base_url = "http://localhost/data/";
+        private readonly static string base_url = "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/";
+        //private readonly static string base_url = "http://localhost/data/";
 
         readonly string[] ImageURLs =
         {
@@ -47,7 +47,7 @@ namespace Extensions.Unity.ImageLoader.Testing
         private Queue myLogQueue = new Queue();
 
         // Start is called before the first frame update
-        async void Start()
+        void Start()
         {
             clearLogsButton.onClick.RemoveAllListeners();
             clearLogsButton.onClick.AddListener(() => {
@@ -74,18 +74,22 @@ namespace Extensions.Unity.ImageLoader.Testing
 
             //var memoryStatsAtStart = SaveCurrentMemoryStats();
 
-            yield return CleanUpEverything();
-            yield return LoadingFromImageLoader();
+            //yield return CleanUpEverything();
+            //yield return LoadingFromImageLoader();
+
+            //yield return CleanUpEverything();
+            //ImageLoader.settings.generateMipMaps = false;
+            //yield return LoadingFromImageLoaderMemoryOptimized();
+            
+            //yield return CleanUpEverything();
+            //ImageLoader.settings.generateMipMaps = true;
+            //yield return LoadingFromImageLoaderMemoryOptimized();
 
             yield return CleanUpEverything();
-            ImageLoader.settings.generateMipMaps = false;
-            yield return LoadingFromImageLoaderMemoryOptimized();
-            
+            yield return LoadSpriteTestingCoroutine(Utils.GetImageUsingUWRTexture, nameof(Utils.GetImageUsingUWRTexture));
+
             yield return CleanUpEverything();
-            ImageLoader.settings.generateMipMaps = true;
-            yield return LoadingFromImageLoaderMemoryOptimized();
-            
-            // yield return LoadSpriteTestingCoroutine();
+            yield return LoadSpriteTestingCoroutine(Utils.GetImageUsingUWRBufferAndEnableMipmapsAndCompression, nameof(Utils.GetImageUsingUWRBufferAndEnableMipmapsAndCompression));
 
             //PrintDiffOfMemoryStatsFromLastSave(memoryStatsAtStart);
 
@@ -109,126 +113,6 @@ namespace Extensions.Unity.ImageLoader.Testing
         {
             ImageLoader.ClearCache().AsUniTask().ToCoroutine();
         }
-
-        #region Profiling & Logs
-        ProfilerRecorder _totalReservedMemoryRecorder;
-        ProfilerRecorder _gcReservedMemoryRecorder;
-        ProfilerRecorder _textureMemoryRecorder;
-        ProfilerRecorder _meshMemoryRecorder;
-
-        struct MemoryStats
-        {
-            public long totalMemory;
-            public long gcMemory;
-            public long textureMemory;
-            public long meshMemory;
-        }
-
-        void OnEnable()
-        {
-            _totalReservedMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "Total Used Memory");
-            _gcReservedMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Used Memory");
-            _textureMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "Texture Memory");
-            _meshMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "Mesh Memory");
-#if !UNITY_EDITOR
-        Application.logMessageReceived += HandleLog;
-#endif
-        }
-        void OnDisable()
-        {
-            _totalReservedMemoryRecorder.Dispose();
-            _gcReservedMemoryRecorder.Dispose();
-            _textureMemoryRecorder.Dispose();
-            _meshMemoryRecorder.Dispose();
-#if !UNITY_EDITOR
-        Application.logMessageReceived -= HandleLog;
-#endif
-        }
-
-        private MemoryStats SaveCurrentMemoryStats()
-        {
-            MemoryStats memoryStats = new MemoryStats();
-
-            memoryStats.totalMemory = _totalReservedMemoryRecorder.LastValue;
-            memoryStats.gcMemory = _gcReservedMemoryRecorder.LastValue;
-            memoryStats.textureMemory = _textureMemoryRecorder.LastValue;
-            memoryStats.meshMemory = _meshMemoryRecorder.LastValue;
-
-            return memoryStats;
-        }
-
-        private void PrintDiffOfMemoryStatsFromLastSave(MemoryStats prevMemoryStats, string msg = "")
-        {
-            Debug.Log($"<color=yellow>Memory Stats Diff: {msg} : Total={Utils.ToSize(_totalReservedMemoryRecorder.LastValue - prevMemoryStats.totalMemory)}, GC={Utils.ToSize(_gcReservedMemoryRecorder.LastValue - prevMemoryStats.gcMemory)}, Texture={Utils.ToSize(_textureMemoryRecorder.LastValue - prevMemoryStats.textureMemory)}, Mesh={Utils.ToSize(_meshMemoryRecorder.LastValue - prevMemoryStats.meshMemory)}</color>");
-        }
-
-        private string myLog;
-        private Vector2 scrollPosition;
-        private int LogHeight = 150;
-        private int LogWidth = 0;
-
-        void HandleLog(string logString, string stackTrace, LogType type)
-        {
-            myLog = logString;
-            string newString = "\n [" + type + "] : " + myLog;
-            myLogQueue.Enqueue(newString);
-            if (type == LogType.Exception)
-            {
-                newString = "\n" + stackTrace;
-                myLogQueue.Enqueue(newString);
-            }
-            myLog = string.Empty;
-            List<string> list = new List<string>();
-            foreach (string mylog in myLogQueue)
-            {
-                list.Add(mylog);
-                //myLog += mylog;
-            }
-            list.Reverse();
-            foreach (string str in list)
-            {
-                myLog += str;
-            }
-
-            scrollPosition = new Vector2(scrollPosition.x, 0);
-
-            //myLog += "\n" + scrollPosition.ToString() + "\n";
-        }
-
-        private void OnGUI()
-        {
-
-            //GUILayout.BeginArea(new Rect(Screen.width - 400, 0, 400, Screen.height));
-            GUILayout.BeginArea(new Rect(10, Screen.height / 2, Screen.width - LogWidth, LogHeight * 3));
-            // GUILayout.BeginArea(new Rect(10, LogHeight, Screen.width - LogWidth, Screen.height - 10));
-            //GUILayout.Label(myLog);
-            //GUILayout.EndArea();
-
-            //// we want to place the TextArea in a particular location - use BeginArea and provide Rect
-            //GUILayout.BeginArea(new Rect(10, Screen.height - LogHeight, Screen.width - 100, Screen.height - 10));
-            // scrollPosition = new Vector2(0, LogHeight * 5);
-            scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Width(Screen.width - 40), GUILayout.Height(LogHeight * 5));
-            //// We just add a single label to go inside the scroll view. Note how the
-            //// scrollbars will work correctly with wordwrap.
-
-            //GUIStyle textStyle = new GUIStyle(GUI.skin.textArea);
-            //textStyle.fontSize = FontLogSize;
-            // GUILayout.TextArea(myLog, textStyle);
-            GUILayout.Label(myLog);
-
-            // End the scrollview we began above.
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-
-            //if (GUI.Button(new Rect(10, 10, 150, 100), "Destroy Sprite"))
-            //{
-            //    Debug.Log("Destroy Sprite");
-            //    Destroy(image.sprite.texture);
-            //    Destroy(image.sprite);
-            //    // image.sprite = null;
-            //}
-        }
-        #endregion
 
         public async UniTask LoadSprite(string url, Image outputImage = null)
         {
@@ -335,27 +219,35 @@ namespace Extensions.Unity.ImageLoader.Testing
             await LoadSprite(ImageURLs[ImageURLs.Length - 2], image);
         }
 
-        public IEnumerator LoadSpriteTestingCoroutine()
+        public IEnumerator LoadSpriteTestingCoroutine(Func<string, Image, IEnumerator> downloadHandler, string handlerName)
         {
-            image.overrideSprite = null;
-
             //ProfilerDriver.enabled = true;
             //Profiler.enabled = true;
+
+            yield return ImageLoader.ClearCache().AsUniTask().ToCoroutine();
+            yield return new WaitForSeconds(1);
+
+            var memoryStatsAtStart = SaveCurrentMemoryStats(handlerName);
+
+            int memSize = 0;
 
             yield return new WaitForSeconds(1);
 
             foreach (var imageURL in ImageURLs)
             {
-                yield return LoadSpriteTesting(imageURL);
+                yield return downloadHandler.Invoke(imageURL, image);
+                memSize += image.overrideSprite.texture.GetRawTextureData().Length;
             }
 
-            image.overrideSprite = spriteCache[ImageURLs[3]];
+            // image.overrideSprite = spriteCache[ImageURLs[3]];
 
-            GC.Collect();
-            AsyncOperation asyncOperation = Resources.UnloadUnusedAssets();
-            yield return new WaitUntil(() => asyncOperation.isDone);
+            PrintDiffOfMemoryStatsFromLastSave(memoryStatsAtStart, handlerName);
 
-            yield return new WaitForSeconds(0.2f);
+            //Profiler.enabled = false;
+            //ProfilerDriver.enabled = false;
+
+            //yield return LoadSprite(ImageURLs[ImageURLs.Length - 2], image);
+            Debug.Log($"<color=lime>{handlerName}: All Images Raw Data Size={Utils.ToSize(memSize)}</color>");
 
             //Profiler.enabled = false;
             //ProfilerDriver.enabled = false;
@@ -426,5 +318,127 @@ namespace Extensions.Unity.ImageLoader.Testing
                 return true;
             return false;
         }
+
+        #region Profiling & Logs
+        ProfilerRecorder _totalReservedMemoryRecorder;
+        ProfilerRecorder _gcReservedMemoryRecorder;
+        ProfilerRecorder _textureMemoryRecorder;
+        ProfilerRecorder _meshMemoryRecorder;
+
+        struct MemoryStats
+        {
+            public long totalMemory;
+            public long gcMemory;
+            public long textureMemory;
+            public long meshMemory;
+        }
+
+        void OnEnable()
+        {
+            _totalReservedMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "Total Used Memory");
+            _gcReservedMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Used Memory");
+            _textureMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "Texture Memory");
+            _meshMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "Mesh Memory");
+#if !UNITY_EDITOR
+        Application.logMessageReceived += HandleLog;
+#endif
+        }
+        void OnDisable()
+        {
+            _totalReservedMemoryRecorder.Dispose();
+            _gcReservedMemoryRecorder.Dispose();
+            _textureMemoryRecorder.Dispose();
+            _meshMemoryRecorder.Dispose();
+#if !UNITY_EDITOR
+        Application.logMessageReceived -= HandleLog;
+#endif
+        }
+
+        private MemoryStats SaveCurrentMemoryStats(string msg = "")
+        {
+            Debug.Log($"<color=yellow>{msg}: MemoryStats - Tracking Start</color>");
+
+            MemoryStats memoryStats = new MemoryStats();
+
+            memoryStats.totalMemory = _totalReservedMemoryRecorder.LastValue;
+            memoryStats.gcMemory = _gcReservedMemoryRecorder.LastValue;
+            memoryStats.textureMemory = _textureMemoryRecorder.LastValue;
+            memoryStats.meshMemory = _meshMemoryRecorder.LastValue;
+
+            return memoryStats;
+        }
+
+        private void PrintDiffOfMemoryStatsFromLastSave(MemoryStats prevMemoryStats, string msg = "")
+        {
+            Debug.Log($"<color=yellow>{msg}: MemoryStats - Tracking End - Diff from Start: Total={Utils.ToSize(_totalReservedMemoryRecorder.LastValue - prevMemoryStats.totalMemory)}, GC={Utils.ToSize(_gcReservedMemoryRecorder.LastValue - prevMemoryStats.gcMemory)}, Texture={Utils.ToSize(_textureMemoryRecorder.LastValue - prevMemoryStats.textureMemory)}, Mesh={Utils.ToSize(_meshMemoryRecorder.LastValue - prevMemoryStats.meshMemory)}</color>");
+        }
+
+        private string myLog;
+        private Vector2 scrollPosition;
+        private int LogHeight = 150;
+        private int LogWidth = 0;
+
+        void HandleLog(string logString, string stackTrace, LogType type)
+        {
+            myLog = logString;
+            string newString = "\n [" + DateTime.Now.ToString("T") + "] [" + type + "] : " + myLog;
+            myLogQueue.Enqueue(newString);
+            if (type == LogType.Exception)
+            {
+                newString = "\n" + stackTrace;
+                myLogQueue.Enqueue(newString);
+            }
+            myLog = string.Empty;
+            List<string> list = new List<string>();
+            foreach (string mylog in myLogQueue)
+            {
+                list.Add(mylog);
+                //myLog += mylog;
+            }
+            list.Reverse();
+            foreach (string str in list)
+            {
+                myLog += str;
+            }
+
+            scrollPosition = new Vector2(scrollPosition.x, 0);
+
+            //myLog += "\n" + scrollPosition.ToString() + "\n";
+        }
+
+        private void OnGUI()
+        {
+
+            //GUILayout.BeginArea(new Rect(Screen.width - 400, 0, 400, Screen.height));
+            GUILayout.BeginArea(new Rect(10, Screen.height / 2 + 50, Screen.width - LogWidth, LogHeight * 2));
+            // GUILayout.BeginArea(new Rect(10, LogHeight, Screen.width - LogWidth, Screen.height - 10));
+            //GUILayout.Label(myLog);
+            //GUILayout.EndArea();
+
+            //// we want to place the TextArea in a particular location - use BeginArea and provide Rect
+            //GUILayout.BeginArea(new Rect(10, Screen.height - LogHeight, Screen.width - 100, Screen.height - 10));
+            // scrollPosition = new Vector2(0, LogHeight * 5);
+            scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Width(Screen.width - 40), GUILayout.Height(LogHeight * 3));
+            //// We just add a single label to go inside the scroll view. Note how the
+            //// scrollbars will work correctly with wordwrap.
+
+            //GUIStyle textStyle = new GUIStyle(GUI.skin.textArea);
+            //textStyle.fontSize = FontLogSize;
+            // GUILayout.TextArea(myLog, textStyle);
+            GUILayout.Label(myLog);
+
+            // End the scrollview we began above.
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+
+            //if (GUI.Button(new Rect(10, 10, 150, 100), "Destroy Sprite"))
+            //{
+            //    Debug.Log("Destroy Sprite");
+            //    Destroy(image.sprite.texture);
+            //    Destroy(image.sprite);
+            //    // image.sprite = null;
+            //}
+        }
+        #endregion
     }
 }

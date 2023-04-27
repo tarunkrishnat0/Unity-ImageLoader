@@ -12,7 +12,10 @@ using System;
 using UnityEngine.Networking;
 using System.IO;
 using UnityEngine.Experimental.Rendering;
+
+#if UNITY_EDITOR
 using UnityEditorInternal;
+#endif
 
 namespace Extensions.Unity.ImageLoader.Testing
 {
@@ -21,24 +24,38 @@ namespace Extensions.Unity.ImageLoader.Testing
         [SerializeField] List<Texture2D> textures = new List<Texture2D>();
         [SerializeField] private Image image;
 
+        [SerializeField] private Button clearLogsButton;
+        [SerializeField] private Button quitButton;
+
         static ProfilerMarker s_SimulatePerfMarker = new ProfilerMarker("Profile.LoadingFromMemoryCache");
 
         static Dictionary<string, Sprite> spriteCache = new Dictionary<string, Sprite>();
 
+        //private readonly static string base_url = "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/";
+        private readonly static string base_url = "http://localhost/data/";
+
         readonly string[] ImageURLs =
-            {
-            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/ImageA.jpg",
-            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/ImageB.png",
-            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/ImageC.png",
-            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/batsman_512.png",
-            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/batsman_1000.jpg",
-            "https://github.com/tarunkrishnat0/Unity-ImageLoader/raw/2021.3.23f1/feature/memory-optimization/Test%20Images/batsman_2048.png",
+        {
+            $"{base_url}ImageA.jpg",
+            $"{base_url}ImageB.png",
+            $"{base_url}ImageC.png",
+            $"{base_url}batsman_512.png",
+            $"{base_url}batsman_1000.jpg",
+            $"{base_url}batsman_2048.png",
         };
+
+        private Queue myLogQueue = new Queue();
 
         // Start is called before the first frame update
         async void Start()
         {
-            Texture.allowThreadedTextureCreation = true;
+            clearLogsButton.onClick.RemoveAllListeners();
+            clearLogsButton.onClick.AddListener(() => {
+                myLog = "";
+                myLogQueue.Clear();
+            });
+            quitButton.onClick.RemoveAllListeners();
+            quitButton.onClick.AddListener(Application.Quit);
 
             spriteCache.Clear();
 
@@ -52,12 +69,40 @@ namespace Extensions.Unity.ImageLoader.Testing
 
         IEnumerator StartTests()
         {
+            yield return new WaitForSeconds(1);
+            yield return new WaitForEndOfFrame();
+
+            //var memoryStatsAtStart = SaveCurrentMemoryStats();
+
+            yield return CleanUpEverything();
             yield return LoadingFromImageLoader();
+
+            yield return CleanUpEverything();
             ImageLoader.settings.generateMipMaps = false;
             yield return LoadingFromImageLoaderMemoryOptimized();
+            
+            yield return CleanUpEverything();
             ImageLoader.settings.generateMipMaps = true;
             yield return LoadingFromImageLoaderMemoryOptimized();
+            
             // yield return LoadSpriteTestingCoroutine();
+
+            //PrintDiffOfMemoryStatsFromLastSave(memoryStatsAtStart);
+
+            //yield return CleanUpEverything();
+
+            //PrintDiffOfMemoryStatsFromLastSave(memoryStatsAtStart, "After cleanup");
+        }
+
+        private IEnumerator CleanUpEverything()
+        {
+            image.overrideSprite = null;
+            GC.Collect(0, GCCollectionMode.Forced, blocking: true);
+            AsyncOperation asyncOperation = Resources.UnloadUnusedAssets();
+            yield return new WaitUntil(() => asyncOperation.isDone);
+
+            yield return new WaitForEndOfFrame();
+            yield return new WaitForSeconds(2f);
         }
 
         private void OnApplicationQuit()
@@ -65,22 +110,131 @@ namespace Extensions.Unity.ImageLoader.Testing
             ImageLoader.ClearCache().AsUniTask().ToCoroutine();
         }
 
-        void OnGUI()
+        #region Profiling & Logs
+        ProfilerRecorder _totalReservedMemoryRecorder;
+        ProfilerRecorder _gcReservedMemoryRecorder;
+        ProfilerRecorder _textureMemoryRecorder;
+        ProfilerRecorder _meshMemoryRecorder;
+
+        struct MemoryStats
         {
-            if (GUI.Button(new Rect(10, 10, 150, 100), "Destroy Sprite"))
-            {
-                Debug.Log("Destroy Sprite");
-                Destroy(image.sprite.texture);
-                Destroy(image.sprite);
-                // image.sprite = null;
-            }
+            public long totalMemory;
+            public long gcMemory;
+            public long textureMemory;
+            public long meshMemory;
         }
+
+        void OnEnable()
+        {
+            _totalReservedMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "Total Reserved Memory");
+            _gcReservedMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Reserved Memory");
+            _textureMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "Texture Memory");
+            _meshMemoryRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "Mesh Memory");
+#if !UNITY_EDITOR
+        Application.logMessageReceived += HandleLog;
+#endif
+        }
+        void OnDisable()
+        {
+            _totalReservedMemoryRecorder.Dispose();
+            _gcReservedMemoryRecorder.Dispose();
+            _textureMemoryRecorder.Dispose();
+            _meshMemoryRecorder.Dispose();
+#if !UNITY_EDITOR
+        Application.logMessageReceived -= HandleLog;
+#endif
+        }
+
+        private MemoryStats SaveCurrentMemoryStats()
+        {
+            MemoryStats memoryStats = new MemoryStats();
+
+            memoryStats.totalMemory = _totalReservedMemoryRecorder.LastValue;
+            memoryStats.gcMemory = _gcReservedMemoryRecorder.LastValue;
+            memoryStats.textureMemory = _textureMemoryRecorder.LastValue;
+            memoryStats.meshMemory = _meshMemoryRecorder.LastValue;
+
+            return memoryStats;
+        }
+
+        private void PrintDiffOfMemoryStatsFromLastSave(MemoryStats prevMemoryStats, string msg = "")
+        {
+            Debug.Log($"<color=yellow>Memory Stats Diff: {msg} : Total={Utils.ToSize(_totalReservedMemoryRecorder.LastValue - prevMemoryStats.totalMemory)}, GC={Utils.ToSize(_gcReservedMemoryRecorder.LastValue - prevMemoryStats.gcMemory)}, Texture={Utils.ToSize(_textureMemoryRecorder.LastValue - prevMemoryStats.textureMemory)}, Mesh={Utils.ToSize(_meshMemoryRecorder.LastValue - prevMemoryStats.meshMemory)}</color>");
+        }
+
+        private string myLog;
+        private Vector2 scrollPosition;
+        private int LogHeight = 150;
+        private int LogWidth = 0;
+
+        void HandleLog(string logString, string stackTrace, LogType type)
+        {
+            myLog = logString;
+            string newString = "\n [" + type + "] : " + myLog;
+            myLogQueue.Enqueue(newString);
+            if (type == LogType.Exception)
+            {
+                newString = "\n" + stackTrace;
+                myLogQueue.Enqueue(newString);
+            }
+            myLog = string.Empty;
+            List<string> list = new List<string>();
+            foreach (string mylog in myLogQueue)
+            {
+                list.Add(mylog);
+                //myLog += mylog;
+            }
+            list.Reverse();
+            foreach (string str in list)
+            {
+                myLog += str;
+            }
+
+            scrollPosition = new Vector2(scrollPosition.x, 0);
+
+            //myLog += "\n" + scrollPosition.ToString() + "\n";
+        }
+
+        private void OnGUI()
+        {
+
+            //GUILayout.BeginArea(new Rect(Screen.width - 400, 0, 400, Screen.height));
+            GUILayout.BeginArea(new Rect(10, Screen.height / 2, Screen.width - LogWidth, LogHeight * 3));
+            // GUILayout.BeginArea(new Rect(10, LogHeight, Screen.width - LogWidth, Screen.height - 10));
+            //GUILayout.Label(myLog);
+            //GUILayout.EndArea();
+
+            //// we want to place the TextArea in a particular location - use BeginArea and provide Rect
+            //GUILayout.BeginArea(new Rect(10, Screen.height - LogHeight, Screen.width - 100, Screen.height - 10));
+            // scrollPosition = new Vector2(0, LogHeight * 5);
+            scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Width(Screen.width - 40), GUILayout.Height(LogHeight * 5));
+            //// We just add a single label to go inside the scroll view. Note how the
+            //// scrollbars will work correctly with wordwrap.
+
+            //GUIStyle textStyle = new GUIStyle(GUI.skin.textArea);
+            //textStyle.fontSize = FontLogSize;
+            // GUILayout.TextArea(myLog, textStyle);
+            GUILayout.Label(myLog);
+
+            // End the scrollview we began above.
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+
+            //if (GUI.Button(new Rect(10, 10, 150, 100), "Destroy Sprite"))
+            //{
+            //    Debug.Log("Destroy Sprite");
+            //    Destroy(image.sprite.texture);
+            //    Destroy(image.sprite);
+            //    // image.sprite = null;
+            //}
+        }
+        #endregion
 
         public async UniTask LoadSprite(string url, Image outputImage = null)
         {
             var sprite = await ImageLoader.LoadSprite(url);
             if (outputImage != null)
-                outputImage.sprite = sprite;
+                outputImage.overrideSprite = sprite;
             Assert.IsNotNull(sprite);
         }
 
@@ -88,13 +242,16 @@ namespace Extensions.Unity.ImageLoader.Testing
         {
             var sprite = await ImageLoader.LoadSpriteMemoryOptimized(url);
             if (outputImage != null)
-                outputImage.sprite = sprite;
+                outputImage.overrideSprite = sprite;
             Assert.IsNotNull(sprite);
         }
 
         public IEnumerator LoadingFromImageLoader()
         {
             yield return ImageLoader.ClearCache().AsUniTask().ToCoroutine();
+            yield return new WaitForSeconds(1);
+
+            var memoryStatsAtStart = SaveCurrentMemoryStats();
 
             int memSize = 0;
             
@@ -107,14 +264,24 @@ namespace Extensions.Unity.ImageLoader.Testing
                 memSize += image.overrideSprite.texture.GetRawTextureData().Length;
             }
 
+            yield return new WaitForSeconds(0.2f);
+
+            PrintDiffOfMemoryStatsFromLastSave(memoryStatsAtStart, "LoadingFromImageLoader");
+
             //yield return LoadSprite(ImageURLs[ImageURLs.Length - 2], image);
 
-            Debug.Log($"<color=lime>LoadingFromImageLoader: MipMaps={ImageLoader.settings.generateMipMaps}, MemorySize={Utils.ToSize(memSize)}</color>");
+            Debug.Log($"<color=lime>LoadingFromImageLoader: MipMaps={ImageLoader.settings.generateMipMaps}, All Images Raw Data Size={Utils.ToSize(memSize)}</color>");
         }
 
         public IEnumerator LoadingFromImageLoaderMemoryOptimized()
         {
+            //ProfilerDriver.enabled = true;
+            //Profiler.enabled = true;
+
             yield return ImageLoader.ClearCache().AsUniTask().ToCoroutine();
+            yield return new WaitForSeconds(1);
+
+            var memoryStatsAtStart = SaveCurrentMemoryStats();
 
             int memSize = 0;
 
@@ -127,8 +294,15 @@ namespace Extensions.Unity.ImageLoader.Testing
                 memSize += image.overrideSprite.texture.GetRawTextureData().Length;
             }
 
+            yield return new WaitForSeconds(0.2f);
+
+            PrintDiffOfMemoryStatsFromLastSave(memoryStatsAtStart, "LoadingFromImageLoaderMemoryOptimized");
+
+            //Profiler.enabled = false;
+            //ProfilerDriver.enabled = false;
+
             //yield return LoadSprite(ImageURLs[ImageURLs.Length - 2], image);
-            Debug.Log($"<color=lime>LoadingFromImageLoaderMemoryOptimized: MipMaps={ImageLoader.settings.generateMipMaps}, MemorySize={Utils.ToSize(memSize)}</color>");
+            Debug.Log($"<color=lime>LoadingFromImageLoaderMemoryOptimized: MipMaps={ImageLoader.settings.generateMipMaps}, All Images Raw Data Size={Utils.ToSize(memSize)}</color>");
         }
 
         public async void LoadingFromMemoryCacheAsync()
@@ -163,8 +337,10 @@ namespace Extensions.Unity.ImageLoader.Testing
 
         public IEnumerator LoadSpriteTestingCoroutine()
         {
-            ProfilerDriver.enabled = true;
-            Profiler.enabled = true;
+            image.overrideSprite = null;
+
+            //ProfilerDriver.enabled = true;
+            //Profiler.enabled = true;
 
             yield return new WaitForSeconds(1);
 
@@ -173,7 +349,7 @@ namespace Extensions.Unity.ImageLoader.Testing
                 yield return LoadSpriteTesting(imageURL);
             }
 
-            image.sprite = spriteCache[ImageURLs[3]];
+            image.overrideSprite = spriteCache[ImageURLs[3]];
 
             GC.Collect();
             AsyncOperation asyncOperation = Resources.UnloadUnusedAssets();
@@ -181,8 +357,8 @@ namespace Extensions.Unity.ImageLoader.Testing
 
             yield return new WaitForSeconds(0.2f);
 
-            Profiler.enabled = false;
-            ProfilerDriver.enabled = false;
+            //Profiler.enabled = false;
+            //ProfilerDriver.enabled = false;
         }
 
         private IEnumerator LoadSpriteTesting(string URL)

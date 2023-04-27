@@ -15,7 +15,7 @@ namespace Extensions.Unity.ImageLoader
 #endif
         public string diskSaveLocation { get; set; } = UnityEngine.Application.persistentDataPath + "/imageCache";
 
-        public bool generateMipMaps = true;
+        public bool generateMipMaps = false;
     }
 
     public enum DebugLevel

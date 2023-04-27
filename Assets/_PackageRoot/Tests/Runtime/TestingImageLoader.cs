@@ -38,6 +38,8 @@ namespace Extensions.Unity.ImageLoader.Testing
         // Start is called before the first frame update
         async void Start()
         {
+            Texture.allowThreadedTextureCreation = true;
+
             spriteCache.Clear();
 
             foreach (var tex in textures)
@@ -51,7 +53,11 @@ namespace Extensions.Unity.ImageLoader.Testing
         IEnumerator StartTests()
         {
             yield return LoadingFromImageLoader();
+            ImageLoader.settings.generateMipMaps = false;
             yield return LoadingFromImageLoaderMemoryOptimized();
+            ImageLoader.settings.generateMipMaps = true;
+            yield return LoadingFromImageLoaderMemoryOptimized();
+            // yield return LoadSpriteTestingCoroutine();
         }
 
         private void OnApplicationQuit()
@@ -103,7 +109,7 @@ namespace Extensions.Unity.ImageLoader.Testing
 
             //yield return LoadSprite(ImageURLs[ImageURLs.Length - 2], image);
 
-            Debug.Log($"<color=lime>LoadingFromImageLoader: Memory Size = {Utils.ToSize(memSize)}</color>");
+            Debug.Log($"<color=lime>LoadingFromImageLoader: MipMaps={ImageLoader.settings.generateMipMaps}, MemorySize={Utils.ToSize(memSize)}</color>");
         }
 
         public IEnumerator LoadingFromImageLoaderMemoryOptimized()
@@ -122,7 +128,7 @@ namespace Extensions.Unity.ImageLoader.Testing
             }
 
             //yield return LoadSprite(ImageURLs[ImageURLs.Length - 2], image);
-            Debug.Log($"<color=lime>LoadingFromImageLoaderMemoryOptimized: Memory Size = {Utils.ToSize(memSize)}</color>");
+            Debug.Log($"<color=lime>LoadingFromImageLoaderMemoryOptimized: MipMaps={ImageLoader.settings.generateMipMaps}, MemorySize={Utils.ToSize(memSize)}</color>");
         }
 
         public async void LoadingFromMemoryCacheAsync()
@@ -181,9 +187,9 @@ namespace Extensions.Unity.ImageLoader.Testing
 
         private IEnumerator LoadSpriteTesting(string URL)
         {
-            // UnityWebRequest uwr = UnityWebRequestTexture.GetTexture(URL);
-            UnityWebRequest uwr = new UnityWebRequest(URL);
-            uwr.downloadHandler = new DownloadHandlerBuffer();
+            UnityWebRequest uwr = UnityWebRequestTexture.GetTexture(URL);
+            //UnityWebRequest uwr = new UnityWebRequest(URL);
+            //uwr.downloadHandler = new DownloadHandlerBuffer();
             uwr.timeout = 30;
 
             // Fire the request
@@ -199,14 +205,14 @@ namespace Extensions.Unity.ImageLoader.Testing
                 }
                 else
                 {
-                    //Texture2D tex = ((DownloadHandlerTexture)uwr.downloadHandler).texture;
-                    //bool hasAlpha = GraphicsFormatUtility.HasAlphaChannel(tex.graphicsFormat);
-                    //Debug.Log($"LoadSpriteTesting: before name={name}, size={Utils.ToSize(tex.GetRawTextureData().Length)}, mipmap={tex.mipmapCount}, format={tex.format}, graphicsFormat={tex.graphicsFormat}, dimensions={tex.width}x{tex.height}, hasAlpha={hasAlpha}");
+                    Texture2D tex = ((DownloadHandlerTexture)uwr.downloadHandler).texture;
+                    bool hasAlpha = GraphicsFormatUtility.HasAlphaChannel(tex.graphicsFormat);
+                    Debug.Log($"LoadSpriteTesting: before name={name}, size={Utils.ToSize(tex.GetRawTextureData().Length)}, mipmap={tex.mipmapCount}, format={tex.format}, graphicsFormat={tex.graphicsFormat}, dimensions={tex.width}x{tex.height}, hasAlpha={hasAlpha}");
 
-                    Debug.Log($"LoadSpriteTesting: before name={name}, data size={Utils.ToSize(uwr.downloadHandler.data.Length)}");
+                    //Debug.Log($"LoadSpriteTesting: before name={name}, data size={Utils.ToSize(uwr.downloadHandler.data.Length)}");
 
-                    var loadedTexture = Utils.CreateTexWithMipmaps(uwr.downloadHandler.data, GraphicsFormat.R8G8B8A8_SRGB);
-
+                    //var loadedTexture = Utils.CreateTexWithMipmaps(uwr.downloadHandler.data, GraphicsFormat.R8G8B8A8_SRGB);
+                    var loadedTexture = tex;
                     Debug.Log($"LoadSpriteTesting: after name={name}, size={Utils.ToSize(loadedTexture.GetRawTextureData().Length)}, mipmap={loadedTexture.mipmapCount}, format={loadedTexture.format}, graphicsFormat={loadedTexture.graphicsFormat}, dimensions={loadedTexture.width}x{loadedTexture.height}");
 
                     Sprite downloadedSprite = Sprite.Create(

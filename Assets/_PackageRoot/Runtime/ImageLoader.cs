@@ -283,7 +283,7 @@ namespace Extensions.Unity.ImageLoader
                 Profiler.BeginSample("LoadSpriteMemoryOptimized " + name);
 
                 //Debug.Log($"LoadSpriteMemoryOptimized: before name={name}, size={Utils.ToSize(request.downloadHandler.data.Length)}");
-                var compressedTexture = Utils.CreateTexWithMipmaps(request.downloadHandler.data, settings.generateMipMaps);
+                var compressedTexture = Utils.CreateTexWithMipmaps(request.downloadHandler.data, settings.generateMipMaps, name);
                 Debug.Log($"LoadSpriteMemoryOptimized: name={name}, size={Utils.ToSize(compressedTexture.GetRawTextureData().Length)}, mipmap={compressedTexture.mipmapCount}, format={compressedTexture.format}, graphicsFormat={compressedTexture.graphicsFormat}, size={compressedTexture.width}x{compressedTexture.height}");
                 var sprite = ToSprite(compressedTexture);
 

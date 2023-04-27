@@ -81,33 +81,44 @@ namespace Extensions.Unity.ImageLoader
             return loadedTexture;
         }
 
-        public static Texture2D CreateTexWithMipmaps(byte[] data, bool shouldGenerateMipMaps = true)
+        public static Texture2D CreateTexWithMipmaps(byte[] data, bool shouldGenerateMipMaps = true, string name = "DynamicTex")
         {
-            GraphicsFormat finalGraphicsFormat;
-#if UNITY_ANDROID
-                finalGraphicsFormat = GraphicsFormat.RGBA_ETC2_SRGB;
-#else
-                finalGraphicsFormat = GraphicsFormat.RGBA_DXT5_SRGB;
-#endif
+            GraphicsFormat finalGraphicsFormat = GraphicsFormat.R8G8B8A8_SRGB;
+//#if UNITY_ANDROID
+//            finalGraphicsFormat = GraphicsFormat.R8G8B8A8_SRGB;
+//            //TextureFormat textureFormat = TextureFormat.ETC2_RGB;
+//#else
+//            finalGraphicsFormat = GraphicsFormat.RGBA_DXT5_SRGB;
+//#endif
+
             TextureCreationFlags flags = TextureCreationFlags.None;
             if (shouldGenerateMipMaps)
                 flags = TextureCreationFlags.MipChain;
 
-            var loadedTexture = new Texture2D(4, 4, finalGraphicsFormat, flags);
-            // var loadedTexture = new Texture2D(width, height, textureFormat, true); // Generates mipmaps without compression
-            loadedTexture.wrapMode = TextureWrapMode.Clamp;
+            // Debug.Log($"Format {finalGraphicsFormat} supported = " + SystemInfo.IsFormatSupported(finalGraphicsFormat, FormatUsage.Linear));
+            // Debug.Log($"Format {textureFormat} supported = " + SystemInfo.SupportsTextureFormat(textureFormat));
+
+            var loadedTexture = new Texture2D(4, 4, finalGraphicsFormat, flags) { 
+                name = name+"-"+shouldGenerateMipMaps,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+            //var loadedTexture = new Texture2D(4, 4, textureFormat, true); // Generates mipmaps without compression
+            // loadedTexture.wrapMode = TextureWrapMode.Clamp;
 
             if (loadedTexture.LoadImage(data) == false)
             {
                 Debug.Log($"CreateTexWithMipmaps: LoadImage failed using format={finalGraphicsFormat}, size={loadedTexture.width}x{loadedTexture.height} trying again with {GraphicsFormat.R8G8B8A8_SRGB}");
-                finalGraphicsFormat = GraphicsFormat.R8G8B8A8_SRGB;
-                loadedTexture = new Texture2D(4, 4, finalGraphicsFormat, flags);
-                if (loadedTexture.LoadImage(data) == false)
-                {
-                    Debug.LogError($"CreateTexWithMipmaps: LoadImage failed, using format={finalGraphicsFormat}, returning null texture");
-                    loadedTexture = null;
-                }
+                //finalGraphicsFormat = GraphicsFormat.R8G8B8A8_SRGB;
+                //loadedTexture = new Texture2D(4, 4, finalGraphicsFormat, flags);
+                //if (loadedTexture.LoadImage(data) == false)
+                //{
+                //    Debug.LogError($"CreateTexWithMipmaps: LoadImage failed, using format={finalGraphicsFormat}, returning null texture");
+                //    loadedTexture = null;
+                //}
             }
+
+            if(loadedTexture.width % 4 == 0 && loadedTexture.height % 4 == 0)
+                loadedTexture.Compress(false);
 
             return loadedTexture;
         }
